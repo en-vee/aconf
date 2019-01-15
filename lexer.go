@@ -2,6 +2,7 @@ package aconf
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"text/scanner"
 )
@@ -37,6 +38,8 @@ const (
 	Other
 )
 
+var currentTokenHasError = false
+
 const NL = 0x000A
 
 type HoconToken struct {
@@ -45,13 +48,14 @@ type HoconToken struct {
 }
 
 ////////////////////////////////////////////
-// Stringer interface methods
+// Stringer interface method(s)
 ////////////////////////////////////////////
 func (token HoconToken) String() string {
 	return fmt.Sprintf("tokenType=%d, tokenValue=%s", token.tokenType, token.tokenValue)
 }
 
 type HoconLexer struct {
+	Reader        io.Reader
 	InputString   string
 	previousToken HoconToken
 	currentToken  HoconToken
@@ -66,6 +70,8 @@ type HoconLexer struct {
 type stateFn func(*HoconLexer) stateFn
 
 var tokenNextStateFunctionMap map[rune]stateFn
+
+var err error
 
 func init() {
 	tokenNextStateFunctionMap = make(map[rune]stateFn)
@@ -89,7 +95,9 @@ func lexString(lexer *HoconLexer) stateFn {
 	hoconToken := HoconToken{}
 	hoconToken.tokenValue = strings.TrimSuffix(strings.TrimPrefix(lexer.scan.TokenText(), `"`), `"`)
 	hoconToken.tokenType = QuotedString
-	lexer.tokens = append(lexer.tokens, hoconToken)
+	if currentTokenHasError == false {
+		lexer.tokens = append(lexer.tokens, hoconToken)
+	}
 	return returnFn
 }
 
@@ -104,9 +112,15 @@ func lexHash(lexer *HoconLexer) stateFn {
 }
 
 func lexText(lexer *HoconLexer) stateFn {
+
 	var returnFn stateFn = lexText
+	currentTokenHasError = false
 	hoconToken := HoconToken{}
 	r := lexer.scan.Scan()
+	if currentTokenHasError == true {
+		lexer.tokens = nil
+		return nil
+	}
 	hoconToken.tokenValue = lexer.scan.TokenText()
 	hoconToken.tokenType = Other
 	switch r {
@@ -137,12 +151,14 @@ func lexText(lexer *HoconLexer) stateFn {
 	case scanner.String:
 		hoconToken.tokenType = QuotedString
 	default:
-		// Anything other than these is treated as an invalid HOCON Token
-		//panic("Invalid Token " + hoconToken.tokenValue)
-		lexer.errs = append(lexer.errs, &LexInvalidTokenErr{lexer.scan.TokenText(), LexLocation{lexer.scan.Line, lexer.scan.Column}})
+		currentTokenHasError = true
+		returnFn = nil
+		lexer.tokens = nil
+		//lexer.errs = append(lexer.errs, &LexInvalidTokenErr{lexer.scan.TokenText(), LexLocation{lexer.scan.Line, lexer.scan.Column}})
+		err = &LexInvalidTokenErr{lexer.scan.TokenText(), LexLocation{lexer.scan.Line, lexer.scan.Column}}
 	}
 
-	if hoconToken.tokenType != Eof && hoconToken.tokenType != Other && hoconToken.tokenType != Hash && hoconToken.tokenType != QuotedString {
+	if currentTokenHasError == false && hoconToken.tokenType != Eof && hoconToken.tokenType != Other && hoconToken.tokenType != Hash && hoconToken.tokenType != QuotedString {
 		//lexer.items <- hoconToken
 		lexer.tokens = append(lexer.tokens, hoconToken)
 	}
@@ -154,61 +170,24 @@ func lexText(lexer *HoconLexer) stateFn {
 	return returnFn
 }
 
-func lexLeftBrace(lexer *HoconLexer) stateFn {
-	lexer.currentToken.tokenType = LeftBrace
-	lexer.currentToken.tokenValue = lexer.scan.TokenText()
-	return nil
-}
-
-func lexRightBrace(lexer *HoconLexer) stateFn {
-	lexer.currentToken.tokenType = RightBrace
-	lexer.currentToken.tokenValue = lexer.scan.TokenText()
-	return nil
-}
-
-func lexEquals(lexer *HoconLexer) stateFn {
-	lexer.currentToken.tokenType = Equals
-	lexer.currentToken.tokenValue = lexer.scan.TokenText()
-	return nil
-}
-
-func lexLeftBracket(lexer *HoconLexer) stateFn {
-	return nil
-}
-
-func lexRightBracket(lexer *HoconLexer) stateFn {
-	return nil
-}
-
-func lexInt(lexer *HoconLexer) stateFn {
-	var returnFn stateFn
-
-	return returnFn
-}
-
-/*
-func (lexer *HoconLexer) Run1() chan HoconToken {
+func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 
 	lexer.scan = scanner.Scanner{}
-	lexer.scan.Init(strings.NewReader(lexer.InputString))
-	//lexer.scan.Mode = scanner.GoTokens
-	//lexer.scan.Mode |= scanner.ScanFloats
-	lexer.items = make(chan HoconToken)
+	lexer.scan.Init(lexer.Reader)
 
-	go lexer.run()
-	return lexer.items
-}
-*/
+	errorHandler := func(s *scanner.Scanner, msg string) {
+		currentTokenHasError = true
+		//err := LexInvalidTokenErr{lexer.scan.TokenText(), LexLocation{lexer.scan.Line, lexer.scan.Column}}
+		err = &LexScannerErr{msg, LexLocation{lexer.scan.Line, lexer.scan.Column}}
+		//lexer.errs = append(lexer.errs, &err)
 
-func (lexer *HoconLexer) Run() ([]HoconToken, []error) {
-
-	lexer.scan = scanner.Scanner{}
-	lexer.scan.Init(strings.NewReader(lexer.InputString))
-
+	}
+	lexer.scan.Error = errorHandler
 	lexer.run()
-	return lexer.tokens, lexer.errs
+	return lexer.tokens, err
 }
 
+// The State Machine loop
 func (lexer *HoconLexer) run() {
 
 	for state := lexText; state != nil; {

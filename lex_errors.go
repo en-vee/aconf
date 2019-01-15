@@ -13,5 +13,14 @@ type LexInvalidTokenErr struct {
 }
 
 func (e *LexInvalidTokenErr) Error() string {
-	return fmt.Sprintf("Invalid Token %s at location %d:%d", e.tokenValue, e.lineNumber, e.columnNumber)
+	return fmt.Sprintf("lexer: %d:%d : Invalid Token %s", e.lineNumber, e.columnNumber, e.tokenValue)
+}
+
+type LexScannerErr struct {
+	msg string
+	LexLocation
+}
+
+func (e *LexScannerErr) Error() string {
+	return fmt.Sprintf("lexer: %d:%d : %s", e.lineNumber, e.columnNumber, e.msg)
 }
