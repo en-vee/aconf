@@ -45,6 +45,7 @@ const NL = 0x000A
 type HoconToken struct {
 	tokenType  HoconTokenType
 	tokenValue string
+	LexLocation
 }
 
 ////////////////////////////////////////////
@@ -90,11 +91,12 @@ func init() {
 }
 
 func lexString(lexer *HoconLexer) stateFn {
-
 	var returnFn stateFn = lexText
 	hoconToken := HoconToken{}
 	hoconToken.tokenValue = strings.TrimSuffix(strings.TrimPrefix(lexer.scan.TokenText(), `"`), `"`)
 	hoconToken.tokenType = QuotedString
+	hoconToken.lineNumber = lexer.scan.Line
+	hoconToken.columnNumber = lexer.scan.Column
 	if currentTokenHasError == false {
 		lexer.tokens = append(lexer.tokens, hoconToken)
 	}
@@ -115,14 +117,15 @@ func lexText(lexer *HoconLexer) stateFn {
 
 	var returnFn stateFn = lexText
 	currentTokenHasError = false
-	hoconToken := HoconToken{}
+
 	r := lexer.scan.Scan()
 	if currentTokenHasError == true {
 		lexer.tokens = nil
 		return nil
 	}
-	hoconToken.tokenValue = lexer.scan.TokenText()
-	hoconToken.tokenType = Other
+	hoconToken := HoconToken{Other, lexer.scan.TokenText(), LexLocation{lexer.scan.Line, lexer.scan.Column}}
+	//hoconToken.tokenValue = lexer.scan.TokenText()
+	//hoconToken.tokenType = Other
 	switch r {
 	case scanner.EOF:
 		hoconToken.tokenType = Eof

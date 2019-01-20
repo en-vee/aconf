@@ -55,18 +55,19 @@ func TestVariousTokenizeTypes(t *testing.T) {
 	for _, testcase := range testTokenize {
 		l := HoconLexer{Reader: strings.NewReader(testcase.fileContents)}
 		if _, err := l.Run(); testcase.err != nil {
-			ok := false
+			ok1 := false
+			// Brilliant example of type switches and assertions used in combination
 			switch x := err.(type) {
 			case *LexScannerErr:
-				e := testcase.err.(*LexScannerErr)
-				ok = (e.lineNumber == x.lineNumber && e.columnNumber == x.columnNumber)
+				e, ok2 := testcase.err.(*LexScannerErr)
+				ok1 = ok2 && (e.lineNumber == x.lineNumber && e.columnNumber == x.columnNumber)
 			case *LexInvalidTokenErr:
-				e := testcase.err.(*LexInvalidTokenErr)
-				ok = (e.lineNumber == x.lineNumber && e.columnNumber == x.columnNumber)
+				e, ok2 := testcase.err.(*LexInvalidTokenErr)
+				ok1 = ok2 && (e.lineNumber == x.lineNumber && e.columnNumber == x.columnNumber)
 			default:
-				ok = true
+				ok1 = true
 			}
-			if !ok {
+			if !ok1 {
 				t.Errorf("wanted = %v, got = %v", testcase.err, err)
 			}
 		}
