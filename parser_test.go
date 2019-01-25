@@ -1,21 +1,50 @@
 package aconf
 
 import (
+	"strings"
 	"testing"
 )
 
+const (
+	unbalancedParenContents = `
+	name = "axlrate-imdg"
+	axlrate { # Main block
+	name = "axlrate-imdg"
+	# Another comment
+	//  # This is an invalid character
+	imdg {
+		timeout = 10 seconds # number of seconds
+		name = "axlrate-imdg"
+	}
+//}`
+
+	balancedParenContents = `
+	name = "axlrate-imdg"
+	axlrate { # Main block
+	name = "axlrate-imdg"
+	# Another comment
+	//  # This is an invalid character
+	imdg {
+		timeout = 10 seconds # number of seconds
+		name = "axlrate-imdg"
+	}
+}
+	`
+)
+
 var balancedParenTests = []struct {
-	fileName string
+	contents string
 	err      error
 }{
-	{"test_data/hocon.good.conf", nil},
-	{"test_data/hocon.unbalanced.paren.conf", &ParserUnbalancedParenthesesErr{}},
+	{balancedParenContents, nil},
+	{unbalancedParenContents, &ParserUnbalancedParenthesesErr{}},
 }
 
 func TestBalancedParentheses(t *testing.T) {
 	for _, test := range balancedParenTests {
 		parser := &HoconParser{}
-		if err := parser.Parse(test.fileName); !errorsAreEqual(err, test.err) {
+		reader := strings.NewReader(test.contents)
+		if err := parser.Parse(reader); !errorsAreEqual(err, test.err) {
 			t.Errorf("Expected : %v, Got : %v", test.err, err)
 		}
 	}
