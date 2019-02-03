@@ -1,7 +1,6 @@
 package aconf
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 )
@@ -15,7 +14,10 @@ const (
 	}
 	`
 	validTokens = `
-name = "axlrate-imdg"
+	s = 100 KB
+	t = 10 seconds	
+	name = axlrate imdg # comment at end of value
+	# First line comment
 //?
 axlrate { # Main block
 	name = "axlrate-imdg"
@@ -29,6 +31,7 @@ axlrate { # Main block
 	`
 	multilineStringTokens = `x = """
 	line1
+	"quoted-and-embedded-line"
 	line2
 	"""
 	`
@@ -38,17 +41,19 @@ var testTokenize = []struct {
 	fileContents string
 	err          error
 }{
+	{validTokens, nil},
 	{multilineStringTokens, nil},
 	{unterminatedLiteralTokens, &LexScannerErr{"", LexLocation{1, 8}}},
 	{unrecognizedTokens, &LexInvalidTokenErr{"", LexLocation{3, 3}}},
-	{validTokens, nil},
 }
 
 func TestVariousTokenizeTypes(t *testing.T) {
 	for _, testcase := range testTokenize {
 		reader := strings.NewReader(testcase.fileContents)
-		l := HoconLexer{Reader: reader}
+		//l := HoconLexer{Reader: reader}
+		l, _ := NewLexer(reader)
 		if tokens, err := l.Run(); err != nil {
+			t.Logf("Error : %v\n", err)
 			ok1 := false
 			// Brilliant example of type switches and assertions used in combination
 			switch x := err.(type) {
@@ -66,7 +71,7 @@ func TestVariousTokenizeTypes(t *testing.T) {
 			}
 		} else {
 			for _, token := range tokens {
-				fmt.Printf("%v\n", token)
+				t.Logf("%v\n", token)
 			}
 		}
 
