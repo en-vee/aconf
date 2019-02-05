@@ -21,6 +21,7 @@ type HoconTokenType uint8
 
 const NL = 0x0A
 const HASH = 0x23
+const HoconWS = 0x20
 
 const (
 	Number HoconTokenType = iota
@@ -120,8 +121,8 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 		}
 
 		switch token {
-		case '#':
-			for r := lexer.scanner.Peek(); r != NL; {
+		case '#': // Processing a comment
+			for r := lexer.scanner.Peek(); r != NL && r != scanner.EOF; {
 				r = lexer.scanner.Next()
 			}
 			hoconToken := HoconToken{Type: NL, Value: "NewLine"}
@@ -135,18 +136,21 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 			tokenValue = lexer.scanner.TokenText()
 			tokenType = tokenTypeMap[token]
 			if token == scanner.Ident || token == scanner.Float || token == scanner.Int {
-				if len(tokens) > 0 && (tokens[len(tokens)-1].Type == Equals || tokens[len(tokens)-1].Type == Colon) {
+				numTokens := len(tokens)
+
+				if numTokens > 0 && (tokens[numTokens-1].Type == Equals || tokens[numTokens-1].Type == Colon) {
 					var buffer = bytes.NewBuffer([]byte(tokenValue))
 					// Keep concatenating values till NL or HASH is encountered
-					for r := lexer.scanner.Peek(); r != NL && r != HASH; r = lexer.scanner.Peek() {
+					for r := lexer.scanner.Peek(); r != NL && r != HASH && r != scanner.EOF; r = lexer.scanner.Peek() {
 						r = lexer.scanner.Next()
 						buffer.WriteString(string(r))
 					}
 					tokenValue = strings.TrimSpace(buffer.String())
-					// check if the value starts with a number & ends in duration/size units
-					if capGroups := durationRegEx.FindAllStringSubmatch(tokenValue, -1); capGroups != nil {
-						//fmt.Println("durationValue =", capGroups[0][1])
-						//fmt.Println("durationUnits =", capGroups[0][2])
+					// Is it a boolean
+					if strings.HasPrefix(tokenValue, "true") || strings.HasPrefix(tokenValue, "false") {
+						tokenType = Boolean
+					} else if capGroups := durationRegEx.FindAllStringSubmatch(tokenValue, -1); capGroups != nil {
+						// check if the value starts with a number & ends in duration/size units
 						v := capGroups[0][1]
 						u := capGroups[0][2]
 						var unitScale time.Duration
@@ -202,15 +206,18 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 						}
 						tokenType = Size
 					}
-				} else {
+				} else if token == scanner.Ident && lexer.scanner.Peek() == '-' {
+					var buffer = bytes.NewBuffer([]byte(tokenValue))
+					// Keep concatenating values till NL or HASH is encountered
+
+					for r := lexer.scanner.Peek(); r != HoconWS && r != scanner.EOF; r = lexer.scanner.Peek() {
+						r = lexer.scanner.Next()
+						buffer.WriteString(string(r))
+					}
+					tokenValue = strings.TrimSpace(buffer.String())
 					tokenType = Key
 				}
 			}
-			/*
-				if token == scanner.Ident && (strings.EqualFold(tokenValue, "true") || strings.EqualFold(tokenValue, "false") || strings.HasPrefix(strings.ToLower(tokenValue), "true") || strings.HasPrefix(strings.ToLower(tokenValue), "false")) {
-					tokenType = Boolean
-				}
-			*/
 		case scanner.String, scanner.RawString:
 			tokenType = tokenTypeMap[token]
 			tokenValue, lexer.err = strconv.Unquote(lexer.scanner.TokenText())
