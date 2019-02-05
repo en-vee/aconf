@@ -23,23 +23,7 @@ const (
 		name = "axlrate"
 	}
 	`
-	validTokens = `
-	s = 100 KB
-	t = 10 seconds	
-	name = axlrate imdg # comment at end of un-quoted value
-	key = "quoted string value"
-	# First line comment
-//?
-axlrate { # Main block
-	name = "axlrate-imdg"
-	# Another comment
-	// * # This is an invalid character
-	imdg {
-		timeout = 10 seconds # number of seconds
-		name = "axlrate-imdg"
-	}
-}
-	`
+
 	multilineStringTokens = `x = """
 line1
 "quoted-and-embedded-line"
