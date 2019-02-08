@@ -6,8 +6,11 @@ import (
 )
 
 const (
-	tokensWithDurationUnits = `
+	tokensWithDurationUnitsWithSpace = `
 	timeOut = 10 seconds
+	`
+	tokensWithDurationUnitsWithoutSpace = `
+	timeOut = 10seconds
 	`
 	tokenWithSizeUnits                = `size = 5 GB`
 	tokensWithUnquotedValues          = `name = axlrate imdg`
@@ -23,6 +26,7 @@ const (
 		name = "axlrate"
 	}
 	`
+	tokensWithForbiddenCharacters = `a { name = @xlrate }`
 
 	multilineStringTokens = `x = """
 line1
@@ -36,6 +40,7 @@ var testInvalidTokens = []struct {
 	fileContents string
 	err          error
 }{
+	{tokensWithForbiddenCharacters, &LexInvalidTokenErr{"", LexLocation{1, 8}}},
 	{unterminatedLiteralTokens, &LexScannerErr{"", LexLocation{1, 8}}},
 	{unrecognizedTokens, &LexInvalidTokenErr{"", LexLocation{3, 3}}},
 }
@@ -47,9 +52,10 @@ var testValidTokens = []struct {
 	value        string
 	valueType    HoconTokenType
 }{
-	{tokensWithCommentsOnSeparateLines, []int{1, 3}, "x", "10", Number},
+	{tokensWithDurationUnitsWithoutSpace, []int{0, 2}, "timeOut", "10000000000", Duration},
+	{tokensWithCommentsOnSeparateLines, []int{1, 3}, "x", "10", Integer},
 	{tokenWithHyphenatedKey, []int{0, 2}, "grid-name", "axlrate-imdg", Identifier},
-	{tokensWithDurationUnits, []int{0, 2}, "timeOut", "10000000000", Duration},
+	{tokensWithDurationUnitsWithSpace, []int{0, 2}, "timeOut", "10000000000", Duration},
 	{tokenWithSizeUnits, []int{0, 2}, "size", "5368709120", Size},
 	{tokensWithCommentsAtEndOfValue, []int{0, 2}, "name", "axlrate-imdg", Identifier},
 	{tokensWithUnquotedValues, []int{0, 2}, "name", "axlrate imdg", Identifier},

@@ -47,11 +47,11 @@ func (e *ErrLexerInvalidToken) Error() string {
 }
 
 type ErrLexerInvalidDuration struct {
-	val int
+	val float64
 }
 
 func (e *ErrLexerInvalidDuration) Error() string {
-	return fmt.Sprintf("lexer: Invalid Duration : %d. Expecting +ve value", e.val)
+	return fmt.Sprintf("lexer: Invalid Duration : %f. Expecting +ve value", e.val)
 }
 
 type ErrLexerInvalidSize struct {

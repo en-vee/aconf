@@ -10,21 +10,26 @@ import (
 	"strings"
 	"text/scanner"
 	"time"
+	"unicode"
 )
 
 type HoconToken struct {
 	Type  HoconTokenType
 	Value string
+	LexLocation
 }
 
 type HoconTokenType uint8
+
+var forbiddenCharactersRegEx *regexp.Regexp
 
 const NL = 0x0A
 const HASH = 0x23
 const HoconWS = 0x20
 
 const (
-	Number HoconTokenType = iota
+	Integer HoconTokenType = iota
+	Float
 	Boolean
 	Identifier
 	Duration
@@ -69,6 +74,15 @@ func NewLexer(reader io.Reader) (*HoconLexer, error) {
 	s := replacer.Replace(string(fileContents))
 	r := strings.NewReader(s)
 	lexer.scanner.Init(r)
+
+	isIdentRune := func(ch rune, i int) bool {
+		//return ch == '@' || ch == '_' || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0
+		// If an identifier contains forbidden characters, then return false
+
+		return (ch == '-' || ch == '_' || ch == '.' || unicode.IsLetter(ch) || unicode.IsDigit(ch) && i > 0)
+	}
+	lexer.scanner.IsIdentRune = isIdentRune
+
 	errorHandler := func(s *scanner.Scanner, msg string) {
 		lexer.err = &LexScannerErr{msg, LexLocation{lexer.scanner.Line, lexer.scanner.Column}}
 	}
@@ -79,6 +93,7 @@ func NewLexer(reader io.Reader) (*HoconLexer, error) {
 var tokenTypeMap map[rune]HoconTokenType
 
 func init() {
+	var err error
 	tokenTypeMap = make(map[rune]HoconTokenType)
 
 	tokenTypeMap['{'] = LeftBrace
@@ -89,11 +104,45 @@ func init() {
 	tokenTypeMap['='] = Equals
 	tokenTypeMap[','] = Comma
 	tokenTypeMap[scanner.Ident] = Identifier
-	tokenTypeMap[scanner.Int] = Number
-	tokenTypeMap[scanner.Float] = Number
+	tokenTypeMap[scanner.Int] = Integer
+	tokenTypeMap[scanner.Float] = Float
 	tokenTypeMap[scanner.String] = Text
 	tokenTypeMap[scanner.RawString] = Text
 
+	forbiddenCharactersRegEx, err = regexp.Compile(`(\$|\"|\{|\}|\[|\]|:|=|,|\+|#|` + "`" + `|\^|\?|!|@|\*|&|\/\/)`)
+	if err != nil {
+		panic("Could not parse forbidden characters Regex")
+	}
+
+}
+
+/*
+Run1 returns a list of acceptable tokens for the parser to perform syntactical checking.
+It is upto the parser to perform concatenation of strings, checking for sequence of tokens, ensuring no dangling tokens are present etc.
+
+Keys are anything to the left of an = or :
+
+Values are unquoted strings and quoted strings to the right of an = or :
+
+A Key/Path expression must always start on a new line
+
+Trailing spaces in Values should be trimmed, unless they are in a quoted string.
+*/
+func (lexer *HoconLexer) Run1() ([]HoconToken, error) {
+	var tokens []HoconToken
+	var err error
+
+	for token := lexer.scanner.Scan(); token != scanner.EOF && lexer.err == nil; token = lexer.scanner.Scan() {
+		switch token {
+
+		case '#': // Processing a comment
+			for r := lexer.scanner.Peek(); r != NL && r != scanner.EOF; {
+				r = lexer.scanner.Next()
+			}
+		}
+	}
+
+	return tokens, err
 }
 
 func (lexer *HoconLexer) Run() ([]HoconToken, error) {
@@ -111,6 +160,11 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 		return nil, err
 	}
 
+	forbiddenCharactersRegEx, err := regexp.Compile(`(\$|\"|\{|\}|\[|\]|:|=|,|\+|#|` + "`" + `|\^|\?|!|@|\*|&|\/\/)`)
+	if err != nil {
+		return nil, err
+	}
+
 	for token := lexer.scanner.Scan(); token != scanner.EOF && lexer.err == nil; token = lexer.scanner.Scan() {
 
 		var tokenValue string
@@ -121,14 +175,20 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 		}
 
 		switch token {
+
 		case '#': // Processing a comment
 			for r := lexer.scanner.Peek(); r != NL && r != scanner.EOF; {
 				r = lexer.scanner.Next()
 			}
-			hoconToken := HoconToken{Type: NL, Value: "NewLine"}
+			hoconToken := HoconToken{Type: NewLine, Value: "NewLine"}
 			tokens = append(tokens, hoconToken)
 			continue
 		case '{', '}', '[', ']', '=', ':', ',', scanner.Ident, scanner.Float, scanner.Int:
+			tokenValue = lexer.scanner.TokenText()
+			// If an Identifier contains any of the forbidden characters, then error out
+			if capGroups := forbiddenCharactersRegEx.FindAllStringSubmatch(tokenValue, -1); token == scanner.Ident && capGroups != nil {
+				return nil, &LexInvalidTokenErr{tokenValue, LexLocation{lexer.scanner.Line, lexer.scanner.Column}}
+			}
 			// Ignore the ':' or '=' if it is going to be followed by an opening Brace or '{'
 			if (token == ':' || token == '=') && lexer.scanner.Peek() == '{' {
 				continue
@@ -140,12 +200,15 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 
 				if numTokens > 0 && (tokens[numTokens-1].Type == Equals || tokens[numTokens-1].Type == Colon) {
 					var buffer = bytes.NewBuffer([]byte(tokenValue))
-					// Keep concatenating values till NL or HASH is encountered
-					for r := lexer.scanner.Peek(); r != NL && r != HASH && r != scanner.EOF; r = lexer.scanner.Peek() {
+
+					// Keep concatenating values till NL or HASH or One of the forbidden characters is encountered
+					for r := lexer.scanner.Peek(); r != NL && r != HASH && r != scanner.EOF && forbiddenCharactersRegEx.FindAllStringSubmatch(string(r), -1) == nil; r = lexer.scanner.Peek() {
 						r = lexer.scanner.Next()
 						buffer.WriteString(string(r))
 					}
 					tokenValue = strings.TrimSpace(buffer.String())
+					// In case of numbers, if the tail of the concatenated string does not match any units, then just strip out the tail and put it in the
+
 					// Is it a boolean
 					if strings.HasPrefix(tokenValue, "true") || strings.HasPrefix(tokenValue, "false") {
 						tokenType = Boolean
@@ -173,7 +236,7 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 							unitScale = 24 * 7 * time.Hour
 						}
 
-						if d, err := strconv.Atoi(v); err == nil {
+						if d, err := strconv.ParseFloat(v, 64); err == nil {
 							if d >= 0 {
 								x := unitScale * time.Duration(d)
 								tokenValue = fmt.Sprintf("%d", x)
@@ -206,32 +269,29 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 						}
 						tokenType = Size
 					}
-				} else if token == scanner.Ident && lexer.scanner.Peek() == '-' {
-					var buffer = bytes.NewBuffer([]byte(tokenValue))
-					// Keep concatenating values till NL or HASH is encountered
-
-					for r := lexer.scanner.Peek(); r != HoconWS && r != scanner.EOF; r = lexer.scanner.Peek() {
-						r = lexer.scanner.Next()
-						buffer.WriteString(string(r))
-					}
-					tokenValue = strings.TrimSpace(buffer.String())
+				} else if token == scanner.Ident {
 					tokenType = Key
 				}
 			}
 		case scanner.String, scanner.RawString:
 			tokenType = tokenTypeMap[token]
 			tokenValue, lexer.err = strconv.Unquote(lexer.scanner.TokenText())
+		case scanner.Char:
+			lexer.err = &ErrLexerInvalidToken{lexer.scanner.TokenText(), LexLocation{lexer.scanner.Line, lexer.scanner.Column}}
+			continue
 		default:
 			lexer.err = &ErrLexerInvalidToken{lexer.scanner.TokenText(), LexLocation{lexer.scanner.Line, lexer.scanner.Column}}
 			continue
 		}
 
-		hoconToken := HoconToken{Type: tokenType, Value: tokenValue}
+		hoconToken := HoconToken{tokenType, tokenValue, LexLocation{lexer.scanner.Line, lexer.scanner.Column}}
 		tokens = append(tokens, hoconToken)
+
 		if lexer.scanner.Peek() == NL {
 			hoconToken := HoconToken{Type: NewLine, Value: "NewLine"}
 			tokens = append(tokens, hoconToken)
 		}
+
 	}
 	return tokens, lexer.err
 }

@@ -1,6 +1,7 @@
 package aconf
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -30,21 +31,54 @@ const (
 	}
 }
 	`
+
+	singlePathExp = `name = "axlrate-imdg"`
+	twoPathExp    = `name = "axlrate"
+	axlrate {
+		imdg {
+			name = "axlrate-imdg"
+			member-count = 10
+		}
+	}`
+	duplicateKeys = `a { b = 10 }
+	a.b = 20`
 )
 
-var balancedParenTests = []struct {
+var unbalancedParenTests = []struct {
 	contents string
 	err      error
 }{
-	{balancedParenContents, nil},
+
 	{unbalancedParenContents, &ParserUnbalancedParenthesesErr{}},
 }
 
-func TestBalancedParentheses(t *testing.T) {
-	for _, test := range balancedParenTests {
+var pathExpressionTests = []string{
+	twoPathExp,
+	duplicateKeys,
+	singlePathExp,
+}
+
+func TestPathExpression(t *testing.T) {
+	for _, testcontents := range pathExpressionTests {
+		parser := &HoconParser{}
+		reader := strings.NewReader(testcontents)
+		var m map[string]interface{}
+		var err error
+		if m, err = parser.Parse(reader); err != nil {
+			t.Errorf("Failed path expression test. Expected : nil. Got : %v", err)
+		}
+
+		for k, v := range m {
+			fmt.Println("key = ", k, "\tvalue = ", v)
+		}
+	}
+}
+
+func TestUnBalancedParentheses(t *testing.T) {
+	for _, test := range unbalancedParenTests {
 		parser := &HoconParser{}
 		reader := strings.NewReader(test.contents)
-		if err := parser.Parse(reader); !errorsAreEqual(err, test.err) {
+		if _, err := parser.Parse(reader); !errorsAreEqual(err, test.err) {
 			t.Errorf("Expected : %v, Got : %v", test.err, err)
 		}
 	}
