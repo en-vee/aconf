@@ -63,7 +63,7 @@ func validateSyntax(tokens []HoconToken) error {
 	return err
 }
 
-// Populate a map of the keys (string) -> values (interface{})
+// Populate a map of the paths/keys (string) -> values (interface{})
 func buildMap(tokens []HoconToken) (map[string]interface{}, error) {
 	var err error
 	var keyPath, prevKeyPath string
@@ -86,12 +86,9 @@ func buildMap(tokens []HoconToken) (map[string]interface{}, error) {
 				m[keyPath], err = strconv.ParseInt(val.Value, 0, 64)
 			case Float, Duration, Size:
 				m[keyPath], err = strconv.ParseFloat(val.Value, 64)
-			case Text:
-			case Size:
 			default:
-
+				m[keyPath] = val.Value
 			}
-			m[keyPath] = tokens[i+2].Value
 
 			keyPath = prevKeyPath
 		}
