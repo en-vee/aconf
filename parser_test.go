@@ -1,9 +1,9 @@
 package aconf
 
 import (
-	"fmt"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -52,25 +52,80 @@ var unbalancedParenTests = []struct {
 	{unbalancedParenContents, &ParserUnbalancedParenthesesErr{}},
 }
 
-var pathExpressionTests = []string{
-	twoPathExp,
-	duplicateKeys,
-	singlePathExp,
+type TestTableStruct struct {
+	contents     string
+	target       interface{}
+	validateFunc func(t interface{}) bool
 }
 
-func TestPathExpression(t *testing.T) {
-	for _, testcontents := range pathExpressionTests {
-		parser := &HoconParser{}
-		reader := strings.NewReader(testcontents)
-		var m map[string]interface{}
-		var err error
-		if m, err = parser.Parse(reader); err != nil {
-			t.Errorf("Failed path expression test. Expected : nil. Got : %v", err)
-		}
+type IntStruct struct {
+	X int
+}
 
-		for k, v := range m {
-			fmt.Println("key = ", k, "\tvalue = ", v)
+type FloatStruct struct {
+	X float64
+}
+
+type StringStruct struct {
+	X string
+}
+
+type DurationStruct struct {
+	X time.Duration
+}
+
+var singleKeyValuePairTests = []TestTableStruct{
+	{contents: `X = 10`, target: &IntStruct{}, validateFunc: func(target interface{}) bool { return target.(*IntStruct).X == 10 }},
+	{contents: `X = 10.4567`, target: &FloatStruct{}, validateFunc: func(target interface{}) bool { return target.(*FloatStruct).X == 10.4567 }},
+	{contents: `X = 10 seconds`, target: &DurationStruct{}, validateFunc: func(target interface{}) bool { return target.(*DurationStruct).X == 10*time.Second }},
+	{contents: `X = unquoted string`, target: &StringStruct{}, validateFunc: func(target interface{}) bool { return target.(*StringStruct).X == "unquoted string" }},
+}
+
+// TestSingleKeyValuePair tests parsing of simple assignments like x = 10 or a = "bcd"
+func TestSingleKeyValuePair(t *testing.T) {
+	for _, testcase := range singleKeyValuePairTests {
+		//t.Log("Before : ", testcase.target)
+		//t.Logf("input: %v", testcase.contents)
+		parser := &HoconParser{}
+		reader := strings.NewReader(testcase.contents)
+		if _, err := parser.Parse(reader, testcase.target); err != nil {
+			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
 		}
+		if !testcase.validateFunc(testcase.target) {
+			t.Errorf("input: %v", testcase.contents)
+		}
+		//t.Log("After : ", testcase.target)
+	}
+}
+
+type MultiValueStruct struct {
+	Y float64
+	Z string
+	X int
+}
+
+var multipleKeyValurPairsTests = []TestTableStruct{
+	{contents: `X = 10
+	Y = 10.897
+	Z = unq uoted`, target: &MultiValueStruct{}, validateFunc: func(target interface{}) bool {
+		v, ok := target.(*MultiValueStruct)
+		return ok && v.X == 10 && v.Y == 10.897 && v.Z == "unq uoted"
+	}},
+}
+
+func TestMultipleKeyValuePairs(t *testing.T) {
+	for _, testcase := range multipleKeyValurPairsTests {
+		//t.Log("Before : ", testcase.target)
+		//t.Logf("input: %v", testcase.contents)
+		parser := &HoconParser{}
+		reader := strings.NewReader(testcase.contents)
+		if _, err := parser.Parse(reader, testcase.target); err != nil {
+			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
+		}
+		if !testcase.validateFunc(testcase.target) {
+			t.Errorf("input: %v", testcase.contents)
+		}
+		//t.Log("After : ", testcase.target)
 	}
 }
 
@@ -78,7 +133,7 @@ func TestUnBalancedParentheses(t *testing.T) {
 	for _, test := range unbalancedParenTests {
 		parser := &HoconParser{}
 		reader := strings.NewReader(test.contents)
-		if _, err := parser.Parse(reader); !errorsAreEqual(err, test.err) {
+		if _, err := parser.Parse(reader, nil); !errorsAreEqual(err, test.err) {
 			t.Errorf("Expected : %v, Got : %v", test.err, err)
 		}
 	}

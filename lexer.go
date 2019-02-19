@@ -193,13 +193,16 @@ func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 			if (token == ':' || token == '=') && lexer.scanner.Peek() == '{' {
 				continue
 			}
-			tokenValue = lexer.scanner.TokenText()
 			tokenType = tokenTypeMap[token]
+			numTokens := len(tokens)
+
 			if token == scanner.Ident || token == scanner.Float || token == scanner.Int {
-				numTokens := len(tokens)
 
 				if numTokens > 0 && (tokens[numTokens-1].Type == Equals || tokens[numTokens-1].Type == Colon) {
 					var buffer = bytes.NewBuffer([]byte(tokenValue))
+					if tokenType != Integer && tokenType != Float {
+						tokenType = Text
+					}
 
 					// Keep concatenating values till NL or HASH or One of the forbidden characters is encountered
 					for r := lexer.scanner.Peek(); r != NL && r != HASH && r != scanner.EOF && forbiddenCharactersRegEx.FindAllStringSubmatch(string(r), -1) == nil; r = lexer.scanner.Peek() {
