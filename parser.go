@@ -9,9 +9,9 @@ import (
 )
 
 type HoconParser struct {
-	kvmap  map[string]interface{}
-	tokens []HoconToken
-	fldNum int
+	kvmap        map[string]interface{}
+	tokens       []HoconToken
+	oldRootValue reflect.Value
 }
 
 func (parser *HoconParser) Parse(hoconContentReader io.Reader, v interface{}) (map[string]interface{}, error) {
@@ -105,10 +105,18 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 				}
 			}
 		} else if parser.tokens[i+1].Type == LeftBrace {
-			parser.tokens = parser.tokens[2:]
-			if v := v.FieldByName(currToken.Value); v.IsValid() && v.Kind() == reflect.Struct {
-				// The root has changed. We now move into the next/nested struct
-				if err := parser.decode(v); err != nil {
+			// Move to the first token which is non-NewLine
+			for index, t := range parser.tokens {
+				if t.Type != NewLine {
+					parser.tokens = parser.tokens[index:]
+					break
+				}
+			}
+			// Check if struct field name matches the current token value
+			if nv := v.FieldByName(currToken.Value); nv.IsValid() && nv.Kind() == reflect.Struct {
+				// The root has changed. We now descend into the next/nested struct
+				parser.oldRootValue = v
+				if err := parser.decode(nv); err != nil {
 					return err
 				}
 			}
@@ -134,8 +142,12 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 		// Start of a struct
 	case LeftBracket:
 		// Start of an array
-	case RightBrace, RightBracket, NewLine:
+	case NewLine:
+		// OK
+	case RightBrace, RightBracket:
 		// ok
+		// Rewind to the old root
+		v = parser.oldRootValue
 	default:
 		err = &ParserInvalidTokenTypeErr{currToken}
 	}

@@ -129,6 +129,51 @@ func TestMultipleKeyValuePairs(t *testing.T) {
 	}
 }
 
+type structWithSingleInnerBlock struct {
+	IntStruct
+	FloatValues struct {
+		FloatStruct
+	}
+	StringValues struct {
+		StringStruct
+	}
+	DurationValues struct {
+		DurationStruct
+	}
+}
+
+var keyValuePairsInBlocks = []TestTableStruct{
+	{contents: `X = 10
+	FloatValues {
+		X = 10.857
+	}
+	StringValues {
+		X = un quoted string
+	}
+	DurationValues {
+		X = 10 seconds
+	}`, target: &structWithSingleInnerBlock{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*structWithSingleInnerBlock)
+		return ok && v.X == 10 && v.FloatValues.X == 10.857 && v.StringValues.X == "un quoted string" && v.DurationValues.X == 10*time.Second
+	}},
+}
+
+func TestKeyValuePairsInBlocks(t *testing.T) {
+	for _, testcase := range keyValuePairsInBlocks {
+		t.Log("Before : ", testcase.target)
+		//t.Logf("input: %v", testcase.contents)
+		parser := &HoconParser{}
+		reader := strings.NewReader(testcase.contents)
+		if _, err := parser.Parse(reader, testcase.target); err != nil {
+			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
+		}
+		if !testcase.validateFunc(testcase.target) {
+			t.Errorf("input: %v", testcase.contents)
+		}
+		t.Log("After : ", testcase.target)
+	}
+}
+
 func TestUnBalancedParentheses(t *testing.T) {
 	for _, test := range unbalancedParenTests {
 		parser := &HoconParser{}
