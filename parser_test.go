@@ -142,6 +142,17 @@ type structWithSingleInnerBlock struct {
 	}
 }
 
+type SysConfig struct {
+	Cluster struct {
+		Name       string
+		Connection struct {
+			Host    string
+			Port    int
+			Timeout time.Duration
+		}
+	}
+}
+
 var keyValuePairsInBlocks = []TestTableStruct{
 	{contents: `X = 10
 	FloatValues {
@@ -155,6 +166,19 @@ var keyValuePairsInBlocks = []TestTableStruct{
 	}`, target: &structWithSingleInnerBlock{}, validateFunc: func(t interface{}) bool {
 		v, ok := t.(*structWithSingleInnerBlock)
 		return ok && v.X == 10 && v.FloatValues.X == 10.857 && v.StringValues.X == "un quoted string" && v.DurationValues.X == 10*time.Second
+	}},
+	{contents: `
+	Cluster {
+		Name = "axlrate-charging"
+		Connection {
+			Host = "1.2.3.4"
+			Port = 10080
+			Timeout = 10 seconds
+		}
+	}
+	`, target: &SysConfig{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*SysConfig)
+		return ok && v.Cluster.Name == "axlrate-charging" && v.Cluster.Connection.Host == "1.2.3.4"
 	}},
 }
 
