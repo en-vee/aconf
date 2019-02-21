@@ -153,7 +153,21 @@ type SysConfig struct {
 	}
 }
 
+type IntArrayStruct struct {
+	X []int
+}
+
 var keyValuePairsInBlocks = []TestTableStruct{
+	// Array with space separating elements
+	{contents: `X = [1 2 3 4 5]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*IntArrayStruct)
+		return ok && v.X[0] == 1 && v.X[1] == 2
+	}},
+	// array with commas separating elements
+	{contents: `X = [1,2,3,4,5]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*IntArrayStruct)
+		return ok && v.X[0] == 1 && v.X[1] == 2
+	}},
 	{contents: `X = 10
 	FloatValues {
 		X = 10.857

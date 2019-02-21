@@ -1,9 +1,11 @@
 package aconf
 
 import (
+	"fmt"
 	"io"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -68,6 +70,10 @@ func validateSyntax(tokens []HoconToken) error {
 
 	// Validate there are no dangling keys i.e. keys followed by nothing
 
+	// Array data type validation
+	// Determine Type of array based on first element in it
+	// If all are not same, then error out
+
 	return err
 }
 
@@ -85,6 +91,20 @@ func (parser *HoconParser) unmarshal(v interface{}) error {
 	return err
 }
 
+func (parser *HoconParser) FieldByName(fieldName string, v reflect.Value) reflect.Value {
+	var nv reflect.Value
+	for i := 0; i < v.NumField(); i++ {
+		if v.Field(i).Type().Field(i).Name == strings.ToTitle(fieldName) {
+			nv = v.Field(i)
+			fmt.Println(v)
+			fmt.Println(nv)
+			fmt.Println(v.FieldByName(fieldName))
+			break
+		}
+	}
+	return nv
+}
+
 func (parser *HoconParser) decode(v reflect.Value) error {
 	var err error
 
@@ -93,12 +113,15 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 	currToken := parser.tokens[i]
 	switch currToken.Type {
 	case Key:
-		if parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon {
+		if (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type != LeftBracket {
 			// Check if key text/tokenValue matches the name of the corresponding Value
 			//if v.Type().Field(0).Name == currToken.Value {
 			// Advance to i+2th element in slice
 			parser.tokens = parser.tokens[2:]
+
+			//if nv := v.FieldByName(currToken.Value); nv.IsValid() {
 			if nv := v.FieldByName(currToken.Value); nv.IsValid() {
+				//if nv := parser.FieldByName(currToken.Value, v); nv.IsValid() {
 				// Short-Circuit and Recurse
 				if err := parser.decode(nv); err != nil {
 					return err
@@ -120,13 +143,30 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 					return err
 				}
 			}
+		} else if (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type == LeftBracket {
+			// (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type == LeftBracket
+			// This is a key which points to an array
+			if nv := v.FieldByName(currToken.Value); nv.IsValid() {
+				parser.tokens = parser.tokens[i+3:]
+				if err := parser.decodeSequence(nv); err != nil {
+					return err
+				}
+			}
 		}
 	case Integer:
 		val, err := strconv.ParseInt(currToken.Value, 10, 64)
+		if err != nil {
+			return err
+		}
+		//fmt.Println(v.Type())
 		v.SetInt(val)
 		return err
 	case Float:
 		val, err := strconv.ParseFloat(currToken.Value, 64)
+		if err != nil {
+			return err
+		}
+		//fmt.Println(v.Type())
 		v.SetFloat(val)
 		return err
 	case Duration:
@@ -154,6 +194,70 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 	if len(parser.tokens) > 1 {
 		parser.tokens = parser.tokens[1:]
 		parser.decode(v)
+	}
+	return err
+}
+
+// Assumes that '[' has already been scanned and first token is the one after '['
+func (parser *HoconParser) decodeSequence(v reflect.Value) error {
+	var err error
+	currentToken := parser.tokens[0]
+	//prevToken := currentToken
+	if currentToken.Type == RightBracket {
+		// End of Array
+	} else if currentToken.Type == LeftBrace {
+		// Array of Objects
+	} else {
+		// Array of primitives
+		// X = 10
+		// Y = [ 1, 2, 3, 4 ]
+		// Y []int
+		// v should be pointing to Y, so depending on data type of currentToken, keep appending to the slice till an invalid token / end of array is encountered
+		if v.Kind() != reflect.Slice {
+			// TODO : Return Error
+		}
+
+		// Count the number of array elements
+		numElements := 0
+		arrayEndIndex := 0
+		for i, token := range parser.tokens {
+			if token.Type == RightBracket {
+				arrayEndIndex = i
+				break
+			}
+			if token.Type != Comma {
+				numElements++
+			}
+		}
+
+		if nv := reflect.MakeSlice(v.Type(), numElements, numElements); nv.IsValid() {
+
+			i := 0
+
+			for _, token := range parser.tokens {
+				if token.Type == RightBracket {
+					parser.tokens = parser.tokens[arrayEndIndex:]
+					break
+				}
+				if token.Type != Comma {
+					// Decode the token value into the current slice element
+					switch token.Type {
+					case Integer:
+						val, err := strconv.ParseInt(token.Value, 10, 64)
+						if err != nil {
+							return err
+						}
+						//fmt.Println(v.Type())
+						nv.Index(i).SetInt(val)
+						i++
+					}
+				}
+			}
+
+			v.Set(nv)
+		}
+
+		// Call decode method to recurse
 	}
 	return err
 }

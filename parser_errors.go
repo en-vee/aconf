@@ -26,10 +26,10 @@ func (err *ParserInvalidArrayErr) Error() string {
 	return fmt.Sprintf("parser: %d:%d : invalid array element %s", err.lineNumber, err.columnNumber, err.tokenValue)
 }
 
-type ParserInvalidTargetErr struct{}
+type ParserInvalidTargetErr struct{ got, want string }
 
 func (err *ParserInvalidTargetErr) Error() string {
-	return fmt.Sprintf("Invalid argument to method Parse. Expecting pointer")
+	return fmt.Sprintf("Invalid argument to method Parse. Want : %v, Got : %v", err.want, err.got)
 }
 
 type ParserInvalidTokenTypeErr struct {
