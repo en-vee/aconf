@@ -54,7 +54,7 @@ func validateSyntax(tokens []HoconToken) error {
 
 	// Validate if closing braces are only preceded by NL or a Value
 	for i, token := range tokens {
-		if token.Type == RightBrace && !(tokens[i-1].Type == Text || tokens[i-1].Type == NewLine) {
+		if token.Type == RightBrace && !(tokens[i-1].Type == Text || tokens[i-1].Type == NewLine || tokens[i-1].Type == RightBracket) {
 			err = &LexInvalidTokenErr{tokens[i-1].Value, tokens[i-1].LexLocation}
 			break
 		}
@@ -173,7 +173,7 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 		val, err := time.ParseDuration(currToken.Value + "ns")
 		v.SetInt(int64(val))
 		return err
-	case Equals, Colon:
+	case Equals, Colon, Comma:
 		// ok
 	case Text:
 		v.SetString(currToken.Value)
@@ -201,6 +201,7 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 // Assumes that '[' has already been scanned and first token is the one after '['
 func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 	var err error
+
 	currentToken := parser.tokens[0]
 	//prevToken := currentToken
 	if currentToken.Type == RightBracket {
@@ -239,7 +240,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 					parser.tokens = parser.tokens[arrayEndIndex:]
 					break
 				}
-				if token.Type != Comma {
+				if token.Type != Comma && token.Type != NewLine {
 					// Decode the token value into the current slice element
 					switch token.Type {
 					case Integer:
@@ -249,8 +250,18 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 						}
 						//fmt.Println(v.Type())
 						nv.Index(i).SetInt(val)
-						i++
+
+					case Float:
+						val, err := strconv.ParseFloat(token.Value, 64)
+						if err != nil {
+							return err
+						}
+						//fmt.Println(v.Type())
+						nv.Index(i).SetFloat(val)
+					case Text:
+						nv.Index(i).SetString(token.Value)
 					}
+					i++
 				}
 			}
 

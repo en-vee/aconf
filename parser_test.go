@@ -157,16 +157,50 @@ type IntArrayStruct struct {
 	X []int
 }
 
+type ArrayInsideStruct struct {
+	A string
+	B struct {
+		X []int
+	}
+}
+
+type ArrayInsideStructFollowedByKeyValPair struct {
+	A string
+	B struct {
+		X []int
+	}
+	C float64
+}
+
 var keyValuePairsInBlocks = []TestTableStruct{
+	// Array inside struct with space separating elements followed by KV pair
+	{contents: `A = some string 
+				B { X = [1 2 3] }
+				C = 12.34`, target: &ArrayInsideStructFollowedByKeyValPair{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*ArrayInsideStructFollowedByKeyValPair)
+		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string" && v.C == 12.34
+	}},
+	// Array inside struct with space separating elements
+	{contents: `A = some string 
+				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*ArrayInsideStruct)
+		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
+	}},
+	// Array inside struct with space separating elements
+	{contents: `A = some string 
+				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*ArrayInsideStruct)
+		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
+	}},
 	// Array with space separating elements
-	{contents: `X = [1 2 3 4 5]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
+	{contents: `X = [1 2 3]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
 		v, ok := t.(*IntArrayStruct)
-		return ok && v.X[0] == 1 && v.X[1] == 2
+		return ok && v.X[0] == 1 && v.X[1] == 2 && v.X[2] == 3
 	}},
 	// array with commas separating elements
 	{contents: `X = [1,2,3,4,5]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
 		v, ok := t.(*IntArrayStruct)
-		return ok && v.X[0] == 1 && v.X[1] == 2
+		return ok && v.X[0] == 1 && v.X[1] == 2 && v.X[2] == 3
 	}},
 	{contents: `X = 10
 	FloatValues {
