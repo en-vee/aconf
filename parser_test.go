@@ -88,7 +88,7 @@ func TestSingleKeyValuePair(t *testing.T) {
 		//t.Logf("input: %v", testcase.contents)
 		parser := &HoconParser{}
 		reader := strings.NewReader(testcase.contents)
-		if _, err := parser.Parse(reader, testcase.target); err != nil {
+		if err := parser.Parse(reader, testcase.target); err != nil {
 			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
 		}
 		if !testcase.validateFunc(testcase.target) {
@@ -119,7 +119,7 @@ func TestMultipleKeyValuePairs(t *testing.T) {
 		//t.Logf("input: %v", testcase.contents)
 		parser := &HoconParser{}
 		reader := strings.NewReader(testcase.contents)
-		if _, err := parser.Parse(reader, testcase.target); err != nil {
+		if err := parser.Parse(reader, testcase.target); err != nil {
 			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
 		}
 		if !testcase.validateFunc(testcase.target) {
@@ -236,7 +236,7 @@ func TestKeyValuePairsInBlocks(t *testing.T) {
 		//t.Logf("input: %v", testcase.contents)
 		parser := &HoconParser{}
 		reader := strings.NewReader(testcase.contents)
-		if _, err := parser.Parse(reader, testcase.target); err != nil {
+		if err := parser.Parse(reader, testcase.target); err != nil {
 			t.Errorf("failed for input : %v. Error : %v", testcase.contents, err)
 		}
 		if !testcase.validateFunc(testcase.target) {
@@ -270,7 +270,7 @@ func TestSingleLevelArrayOfObjects(t *testing.T) {
 	target := &TargetStruct{}
 	parser := &HoconParser{}
 	reader := strings.NewReader(fileContents)
-	if _, err := parser.Parse(reader, target); err != nil {
+	if err := parser.Parse(reader, target); err != nil {
 		t.Errorf("failed for input : %v. Error : %v", fileContents, err)
 	}
 	// Validate
@@ -287,7 +287,7 @@ func TestUnBalancedParentheses(t *testing.T) {
 	for _, test := range unbalancedParenTests {
 		parser := &HoconParser{}
 		reader := strings.NewReader(test.contents)
-		if _, err := parser.Parse(reader, nil); !errorsAreEqual(err, test.err) {
+		if err := parser.Parse(reader, nil); !errorsAreEqual(err, test.err) {
 			t.Errorf("Expected : %v, Got : %v", test.err, err)
 		}
 	}

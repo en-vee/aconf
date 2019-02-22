@@ -20,6 +20,33 @@ go get -u github.com/en-vee/aconf
 
 ## API Usage
 - Define the HOCON Configuration file. All property keys will need to start with a capital letter
-- Create a HOCON parser
+```js
+A {
+    B = 10
+    T = 25 seconds
+    C = [1, 2, 3, 4]
+}
+```
+- Create a HOCON parser by providing an ```io.Reader``` to read the file
+```go
+reader, err := os.Open("/path/to/configFilename.conf")
+parser := &HoconParser{}
+```
 - Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file
-- Call the Parse method
+```go
+type ConfigFile struct {
+    A struct {
+        B int
+        T time.Duration
+        C []int
+    }
+}
+```
+- Call the Parse method to decode the Configuration file contents into the pointer to the struct
+```go
+var appConfig = &ConfigFile{}
+if err := parser.Parse(reader, appConfig); err != nil {
+			fmt.Printf("Error %v", err)
+}
+```
+- If the Parse method returns without errors, the ```appConfig``` pointer in the example above will be populated with the values from the config file. For example, ```appConfig.B = 10``` or ```appConfig.T = 25s```

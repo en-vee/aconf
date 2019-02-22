@@ -15,24 +15,22 @@ type HoconParser struct {
 	oldRootValue reflect.Value
 }
 
-func (parser *HoconParser) Parse(hoconContentReader io.Reader, v interface{}) (map[string]interface{}, error) {
+func (parser *HoconParser) Parse(hoconContentReader io.Reader, v interface{}) error {
 
 	var err error
-
-	var m map[string]interface{}
 
 	//lexer := HoconLexer{Reader: hoconContentReader}
 	lexer, err := NewLexer(hoconContentReader)
 	if parser.tokens, err = lexer.Run(); err != nil || parser.tokens == nil {
-		return nil, err
+		return err
 	}
 
 	if err = validateSyntax(parser.tokens); err != nil {
-		return nil, err
+		return err
 	}
 
 	if err = parser.unmarshal(v); err != nil {
-		return nil, err
+		return err
 	}
 
 	/*
@@ -41,7 +39,7 @@ func (parser *HoconParser) Parse(hoconContentReader io.Reader, v interface{}) (m
 		}
 	*/
 
-	return m, err
+	return err
 }
 
 func validateSyntax(tokens []HoconToken) error {
