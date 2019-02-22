@@ -54,11 +54,11 @@ var testValidTokens = []struct {
 }{
 	{tokensWithDurationUnitsWithoutSpace, []int{0, 2}, "timeOut", "10000000000", Duration},
 	{tokensWithCommentsOnSeparateLines, []int{1, 3}, "x", "10", Integer},
-	{tokenWithHyphenatedKey, []int{0, 2}, "grid-name", "axlrate-imdg", Identifier},
+	{tokenWithHyphenatedKey, []int{0, 2}, "grid-name", "axlrate-imdg", Text},
 	{tokensWithDurationUnitsWithSpace, []int{0, 2}, "timeOut", "10000000000", Duration},
 	{tokenWithSizeUnits, []int{0, 2}, "size", "5368709120", Size},
-	{tokensWithCommentsAtEndOfValue, []int{0, 2}, "name", "axlrate-imdg", Identifier},
-	{tokensWithUnquotedValues, []int{0, 2}, "name", "axlrate imdg", Identifier},
+	{tokensWithCommentsAtEndOfValue, []int{0, 2}, "name", "axlrate-imdg", Text},
+	{tokensWithUnquotedValues, []int{0, 2}, "name", "axlrate imdg", Text},
 	{multilineStringTokens, []int{0, 2}, "x", "\nline1\n\"quoted-and-embedded-line\"\nline2\n", Text},
 }
 
@@ -82,7 +82,7 @@ func TestValidTokens(t *testing.T) {
 		}
 
 		if !(tokens[testcase.tokenIndices[1]].Type == testcase.valueType) {
-			t.Errorf("Mismatched Types -> Got: %v, Want: %v", testcase.valueType, tokens[testcase.tokenIndices[1]].Type)
+			t.Errorf("Input : %v, Mismatched Types -> Got: %v, Want: %v", testcase.fileContents, testcase.valueType, tokens[testcase.tokenIndices[1]].Type)
 		}
 	}
 }

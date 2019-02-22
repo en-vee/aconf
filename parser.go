@@ -1,7 +1,6 @@
 package aconf
 
 import (
-	"fmt"
 	"io"
 	"reflect"
 	"strconv"
@@ -96,9 +95,9 @@ func (parser *HoconParser) FieldByName(fieldName string, v reflect.Value) reflec
 	for i := 0; i < v.NumField(); i++ {
 		if v.Field(i).Type().Field(i).Name == strings.ToTitle(fieldName) {
 			nv = v.Field(i)
-			fmt.Println(v)
-			fmt.Println(nv)
-			fmt.Println(v.FieldByName(fieldName))
+			//fmt.Println(v)
+			//fmt.Println(nv)
+			//fmt.Println(v.FieldByName(fieldName))
 			break
 		}
 	}
@@ -158,7 +157,7 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		//fmt.Println(v.Type())
+		////fmt.Println(v.Type())
 		v.SetInt(val)
 		return err
 	case Float:
@@ -166,7 +165,7 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 		if err != nil {
 			return err
 		}
-		//fmt.Println(v.Type())
+		////fmt.Println(v.Type())
 		v.SetFloat(val)
 		return err
 	case Duration:
@@ -187,8 +186,8 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 	case RightBrace, RightBracket:
 		// ok
 		// Rewind to the old root
-		fmt.Println("v=", v)
-		fmt.Println("oldRootValue=", parser.oldRootValue)
+		//fmt.Println("v=", v)
+		//fmt.Println("oldRootValue=", parser.oldRootValue)
 		v = parser.oldRootValue
 		if parser.oldRootValue.Kind() == reflect.Slice {
 			// Go back to the decodeSequence method
@@ -217,10 +216,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 		// X = [ { a = "10", b = 20 }, { a = "30", b = 40 } ]
 		// struct { X []struct {A string, B int} }
 		// X = [ { a = "10", b = [ 1 2 3 4 ] } ]
-		// How can we count the number of objects efficiently ?
-		// Allocate a slice
-		// Need to get first element
-		// For each element in the token slice, append to the target slice
+
 		// Create a dummy element to get the type
 		dummy := reflect.MakeSlice(v.Type(), 1, 1)
 		sliceElementType := dummy.Index(0).Type()
@@ -232,8 +228,8 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 			//for _, t := range parser.tokens {
 			sliceElement := reflect.New(sliceElementType).Elem()
 			//nv := reflect.MakeSlice(v.Type(), 1, 1)
-			fmt.Println(v.Type())     // v points to array variable // []struct { A string; B int }
-			fmt.Println(sliceElement) // nv // [{ 0}]
+			//fmt.Println(v.Type())     // v points to array variable // []struct { A string; B int }
+			//fmt.Println(sliceElement) // nv // [{ 0}]
 
 			t := parser.tokens[0]
 			if t.Type == RightBracket {
@@ -244,20 +240,20 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 				// Set the value based on type
 				// Iterate over fields within the array element
 				// And maybe invoke decode method to set the value into the element
-				fmt.Println(sliceElement.Type()) //struct { A string; B int }
+				//fmt.Println(sliceElement.Type()) //struct { A string; B int }
 
 				parser.oldRootValue = v
-				fmt.Println(parser.oldRootValue)
+				//fmt.Println(parser.oldRootValue)
 				if err := parser.decode(sliceElement); err != nil {
 					return err
 				}
-				fmt.Println(sliceElement)
-				fmt.Println(nv)
+				//fmt.Println(sliceElement)
+				//fmt.Println(nv)
 				//v = reflect.AppendSlice(v, nv)
 
 				nv = reflect.Append(nv, sliceElement)
 
-				fmt.Println(nv)
+				//fmt.Println(nv)
 			}
 			i++
 		}
@@ -302,7 +298,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 						if err != nil {
 							return err
 						}
-						//fmt.Println(v.Type())
+						////fmt.Println(v.Type())
 						nv.Index(i).SetInt(val)
 
 					case Float:
@@ -310,7 +306,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 						if err != nil {
 							return err
 						}
-						//fmt.Println(v.Type())
+						////fmt.Println(v.Type())
 						nv.Index(i).SetFloat(val)
 					case Text:
 						nv.Index(i).SetString(token.Value)
