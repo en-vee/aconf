@@ -246,6 +246,43 @@ func TestKeyValuePairsInBlocks(t *testing.T) {
 	}
 }
 
+func TestSingleLevelArrayOfObjects(t *testing.T) {
+	fileContents := `
+						X = [ 
+							{ 
+								A = "10", 
+								B = 20 
+							}, 
+							{ 
+								A = "30", 
+								B = 40 
+							} 
+						]
+						Y = 12.34
+					`
+	type TargetStruct struct {
+		Y float64
+		X []struct {
+			A string
+			B int
+		}
+	}
+	target := &TargetStruct{}
+	parser := &HoconParser{}
+	reader := strings.NewReader(fileContents)
+	if _, err := parser.Parse(reader, target); err != nil {
+		t.Errorf("failed for input : %v. Error : %v", fileContents, err)
+	}
+	// Validate
+	want := &TargetStruct{Y: 12.34, X: []struct {
+		A string
+		B int
+	}{{"10", 20}, {"30", 40}}}
+	if !(target.Y == 12.34 && target.X[0].A == "10" && target.X[1].A == "30") {
+		t.Errorf("Got: %v, Want : %v", target, want)
+	}
+}
+
 func TestUnBalancedParentheses(t *testing.T) {
 	for _, test := range unbalancedParenTests {
 		parser := &HoconParser{}

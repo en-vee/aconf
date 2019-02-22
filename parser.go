@@ -187,7 +187,13 @@ func (parser *HoconParser) decode(v reflect.Value) error {
 	case RightBrace, RightBracket:
 		// ok
 		// Rewind to the old root
+		fmt.Println("v=", v)
+		fmt.Println("oldRootValue=", parser.oldRootValue)
 		v = parser.oldRootValue
+		if parser.oldRootValue.Kind() == reflect.Slice {
+			// Go back to the decodeSequence method
+			return nil
+		}
 	default:
 		err = &ParserInvalidTokenTypeErr{currToken}
 	}
@@ -208,6 +214,54 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 		// End of Array
 	} else if currentToken.Type == LeftBrace {
 		// Array of Objects
+		// X = [ { a = "10", b = 20 }, { a = "30", b = 40 } ]
+		// struct { X []struct {A string, B int} }
+		// X = [ { a = "10", b = [ 1 2 3 4 ] } ]
+		// How can we count the number of objects efficiently ?
+		// Allocate a slice
+		// Need to get first element
+		// For each element in the token slice, append to the target slice
+		// Create a dummy element to get the type
+		dummy := reflect.MakeSlice(v.Type(), 1, 1)
+		sliceElementType := dummy.Index(0).Type()
+
+		// Make the actual Slice
+		nv := reflect.MakeSlice(v.Type(), 0, 0)
+
+		for numTokens, i := len(parser.tokens), 1; i < numTokens; i++ {
+			//for _, t := range parser.tokens {
+			sliceElement := reflect.New(sliceElementType).Elem()
+			//nv := reflect.MakeSlice(v.Type(), 1, 1)
+			fmt.Println(v.Type())     // v points to array variable // []struct { A string; B int }
+			fmt.Println(sliceElement) // nv // [{ 0}]
+
+			t := parser.tokens[0]
+			if t.Type == RightBracket {
+				break
+			}
+			parser.tokens = parser.tokens[1:]
+			if t.Type != Comma && t.Type != RightBrace && t.Type != RightBracket {
+				// Set the value based on type
+				// Iterate over fields within the array element
+				// And maybe invoke decode method to set the value into the element
+				fmt.Println(sliceElement.Type()) //struct { A string; B int }
+
+				parser.oldRootValue = v
+				fmt.Println(parser.oldRootValue)
+				if err := parser.decode(sliceElement); err != nil {
+					return err
+				}
+				fmt.Println(sliceElement)
+				fmt.Println(nv)
+				//v = reflect.AppendSlice(v, nv)
+
+				nv = reflect.Append(nv, sliceElement)
+
+				fmt.Println(nv)
+			}
+			i++
+		}
+		v.Set(nv)
 	} else {
 		// Array of primitives
 		// X = 10
