@@ -32,7 +32,7 @@ A {
 reader, err := os.Open("/path/to/configFilename.conf")
 parser := &HoconParser{}
 ```
-- Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file
+- Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file. At the time of writing, golang based Struct Tags are not supported.
 ```go
 type ConfigFile struct {
     A struct {
