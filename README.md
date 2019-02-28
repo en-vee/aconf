@@ -32,11 +32,12 @@ A {
 reader, err := os.Open("/path/to/configFilename.conf")
 parser := &HoconParser{}
 ```
-- Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file. At the time of writing, golang based Struct Tags are not supported.
+- Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file. 
+- Struct Tags are also supported with the key being hocon. An example is shown below. The tag key **must** be ```hocon```
 ```go
 type ConfigFile struct {
     A struct {
-        B int
+        B int `hocon:"b"`
         T time.Duration
         C []int
     }
