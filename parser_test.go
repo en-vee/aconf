@@ -180,40 +180,15 @@ var keyValuePairsInBlocks = []TestTableStruct{
 		v, ok := t.(*ArrayInsideStructFollowedByKeyValPair)
 		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string" && v.C == 12.34
 	}},
-	// Array inside struct with space separating elements
-	{contents: `A = some string 
-				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
-		v, ok := t.(*ArrayInsideStruct)
-		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
-	}},
-	// Array inside struct with space separating elements
-	{contents: `A = some string 
-				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
-		v, ok := t.(*ArrayInsideStruct)
-		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
-	}},
-	// Array with space separating elements
-	{contents: `X = [1 2 3]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
-		v, ok := t.(*IntArrayStruct)
-		return ok && v.X[0] == 1 && v.X[1] == 2 && v.X[2] == 3
-	}},
 	// array with commas separating elements
 	{contents: `X = [1,2,3,4,5]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
 		v, ok := t.(*IntArrayStruct)
 		return ok && v.X[0] == 1 && v.X[1] == 2 && v.X[2] == 3
 	}},
-	{contents: `X = 10
-	FloatValues {
-		X = 10.857
-	}
-	StringValues {
-		X = un quoted string
-	}
-	DurationValues {
-		X = 10 seconds
-	}`, target: &structWithSingleInnerBlock{}, validateFunc: func(t interface{}) bool {
-		v, ok := t.(*structWithSingleInnerBlock)
-		return ok && v.X == 10 && v.FloatValues.X == 10.857 && v.StringValues.X == "un quoted string" && v.DurationValues.X == 10*time.Second
+	// Array with space separating elements
+	{contents: `X = [1 2 3]`, target: &IntArrayStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*IntArrayStruct)
+		return ok && v.X[0] == 1 && v.X[1] == 2 && v.X[2] == 3
 	}},
 	{contents: `
 	Cluster {
@@ -228,12 +203,38 @@ var keyValuePairsInBlocks = []TestTableStruct{
 		v, ok := t.(*SysConfig)
 		return ok && v.Cluster.Name == "axlrate-charging" && v.Cluster.Connection.Host == "1.2.3.4"
 	}},
+	{contents: `X = 10
+	FloatValues {
+		X = 10.857
+	}
+	StringValues {
+		X = un quoted string
+	}
+	DurationValues {
+		X = 10 seconds
+	}`, target: &structWithSingleInnerBlock{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*structWithSingleInnerBlock)
+		return ok && v.X == 10 && v.FloatValues.X == 10.857 && v.StringValues.X == "un quoted string" && v.DurationValues.X == 10*time.Second
+	}},
+	// Array inside struct with space separating elements
+	{contents: `A = some string 
+				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*ArrayInsideStruct)
+		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
+	}},
+
+	// Array inside struct with space separating elements
+	{contents: `A = some string 
+				B { X = [1 2 3] }`, target: &ArrayInsideStruct{}, validateFunc: func(t interface{}) bool {
+		v, ok := t.(*ArrayInsideStruct)
+		return ok && v.B.X[0] == 1 && v.B.X[1] == 2 && v.B.X[2] == 3 && v.A == "some string"
+	}},
 }
 
 func TestKeyValuePairsInBlocks(t *testing.T) {
 	for _, testcase := range keyValuePairsInBlocks {
-		t.Log("Before : ", testcase.target)
-		//t.Logf("input: %v", testcase.contents)
+		//t.Log("Before : ", testcase.target)
+		t.Logf("input: %v", testcase.contents)
 		parser := &HoconParser{}
 		reader := strings.NewReader(testcase.contents)
 		if err := parser.Parse(reader, testcase.target); err != nil {
@@ -242,7 +243,7 @@ func TestKeyValuePairsInBlocks(t *testing.T) {
 		if !testcase.validateFunc(testcase.target) {
 			t.Errorf("input: %v", testcase.contents)
 		}
-		t.Log("After : ", testcase.target)
+		t.Log("After Decode : ", testcase.target)
 	}
 }
 
@@ -281,6 +282,39 @@ func TestSingleLevelArrayOfObjects(t *testing.T) {
 	if !(target.Y == 12.34 && target.X[0].A == "10" && target.X[1].A == "30") {
 		t.Errorf("Got: %v, Want : %v", target, want)
 	}
+}
+
+func TestArrayOfObjectsInArray(t *testing.T) {
+	fileContents := `
+	A = 20
+	B = [
+			{
+				X = unquoted string1,
+				Y = [1 2 3 4]
+			}
+			{
+				X = unquoted string2,
+				Y = [5 6 7 8]
+			}
+	]
+	`
+
+	type TargetStruct struct {
+		A int
+		B []struct {
+			X string
+			Y []int
+		}
+	}
+	target := &TargetStruct{}
+	t.Logf("Before : %v", target)
+	parser := &HoconParser{}
+	reader := strings.NewReader(fileContents)
+	if err := parser.Parse(reader, target); err != nil {
+		t.Errorf("failed for input : %v. Error : %v", fileContents, err)
+	}
+
+	t.Logf("After : %v", target)
 }
 
 func TestUnBalancedParentheses(t *testing.T) {

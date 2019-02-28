@@ -50,3 +50,4 @@ if err := parser.Parse(reader, appConfig); err != nil {
 }
 ```
 - If the Parse method returns without errors, the ```appConfig``` pointer in the example above will be populated with the values from the config file. For example, ```appConfig.B = 10``` or ```appConfig.T = 25s```
+- Be sure to have a look at the parser_test.go file for various examples of Config file formats

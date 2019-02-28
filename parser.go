@@ -10,9 +10,10 @@ import (
 )
 
 type HoconParser struct {
-	kvmap        map[string]interface{}
-	tokens       []HoconToken
-	oldRootValue reflect.Value
+	tokens            []HoconToken
+	sliceBracketStack []int
+	insideSlice       bool
+	returnControl     bool
 }
 
 func (parser *HoconParser) Parse(hoconContentReader io.Reader, v interface{}) error {
@@ -82,9 +83,9 @@ func (parser *HoconParser) unmarshal(v interface{}) error {
 	// Check if rv kind is pointer, if not, then error out
 	rv := reflect.ValueOf(v)
 	if rv.IsNil() || rv.Kind() != reflect.Ptr {
-		return &ParserInvalidTargetErr{}
+		return &ParserInvalidTargetErr{got: rv.Kind().String(), want: reflect.Ptr.String()}
 	}
-	err = parser.decode(rv.Elem())
+	err = parser.decode(rv.Elem(), rv.Elem())
 	return err
 }
 
@@ -93,230 +94,239 @@ func (parser *HoconParser) FieldByName(fieldName string, v reflect.Value) reflec
 	for i := 0; i < v.NumField(); i++ {
 		if v.Field(i).Type().Field(i).Name == strings.ToTitle(fieldName) {
 			nv = v.Field(i)
-			//fmt.Println(v)
-			//fmt.Println(nv)
-			//fmt.Println(v.FieldByName(fieldName))
+			////fmt.Println(v)
+			////fmt.Println(nv)
+			////fmt.Println(v.FieldByName(fieldName))
 			break
 		}
 	}
 	return nv
 }
 
-func (parser *HoconParser) decode(v reflect.Value) error {
+// function decode runs the main loop iterating over tokens and invoking handler functions
+func (parser *HoconParser) decode(v reflect.Value, pv reflect.Value) error {
 	var err error
 
-	// Start with the first token and determine it's type
-	i := 0
-	currToken := parser.tokens[i]
-	switch currToken.Type {
-	case Key:
-		if (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type != LeftBracket {
-			// Check if key text/tokenValue matches the name of the corresponding Value
-			//if v.Type().Field(0).Name == currToken.Value {
-			// Advance to i+2th element in slice
-			parser.tokens = parser.tokens[2:]
+	for {
+		token := parser.tokens[0]
+		//fmt.Println("tokenValue =", token.Value)
+		//fmt.Println("v =", v.Type(), "pv =", pv.Type())
 
-			//if nv := v.FieldByName(currToken.Value); nv.IsValid() {
-			if nv := v.FieldByName(currToken.Value); nv.IsValid() {
-				//if nv := parser.FieldByName(currToken.Value, v); nv.IsValid() {
-				// Short-Circuit and Recurse
-				if err := parser.decode(nv); err != nil {
-					return err
-				}
+		switch token.Type {
+		case Key:
+			v = pv.FieldByName(token.Value)
+		case Equals, Colon, Comma:
+		case NewLine:
+		case Boolean, Integer, Duration, Float, Text:
+			if err = parser.setValue(v, token); err != nil {
+				return err
 			}
-		} else if parser.tokens[i+1].Type == LeftBrace {
-			// Move to the first token which is non-NewLine
-			for index, t := range parser.tokens {
-				if t.Type != NewLine {
-					parser.tokens = parser.tokens[index:]
-					break
-				}
+		case LeftBrace:
+			/*
+				Use root/parent value pv = v
+				And then invoke decode object
+			*/
+			parser.tokens = parser.tokens[1:]
+			if err = parser.decodeObject(v, v); err != nil {
+				return err
 			}
-			// Check if struct field name matches the current token value
-			if nv := v.FieldByName(currToken.Value); nv.IsValid() && nv.Kind() == reflect.Struct {
-				// The root has changed. We now descend into the next/nested struct
-				parser.oldRootValue = v
-				if err := parser.decode(nv); err != nil {
-					return err
-				}
+		case LeftBracket:
+			// start of an slice
+			// create the slice
+			nv := reflect.MakeSlice(v.Type(), 0, 0)
+			v.Set(nv)
+			// Call decodeSequence
+			parser.tokens = parser.tokens[1:]
+			if err = parser.decodeSequence(v, v); err != nil {
+				return err
 			}
-		} else if (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type == LeftBracket {
-			// (parser.tokens[i+1].Type == Equals || parser.tokens[i+1].Type == Colon) && parser.tokens[i+2].Type == LeftBracket
-			// This is a key which points to an array
-			if nv := v.FieldByName(currToken.Value); nv.IsValid() {
-				parser.tokens = parser.tokens[i+3:]
-				if err := parser.decodeSequence(nv); err != nil {
-					return err
-				}
-			}
+		case RightBrace:
+		case RightBracket:
 		}
-	case Integer:
-		val, err := strconv.ParseInt(currToken.Value, 10, 64)
-		if err != nil {
-			return err
+
+		// Advance the tokens
+		numTokens := len(parser.tokens)
+		if numTokens <= 1 {
+			break
 		}
-		////fmt.Println(v.Type())
-		v.SetInt(val)
-		return err
-	case Float:
-		val, err := strconv.ParseFloat(currToken.Value, 64)
-		if err != nil {
-			return err
-		}
-		////fmt.Println(v.Type())
-		v.SetFloat(val)
-		return err
-	case Duration:
-		val, err := time.ParseDuration(currToken.Value + "ns")
-		v.SetInt(int64(val))
-		return err
-	case Equals, Colon, Comma:
-		// ok
-	case Text:
-		v.SetString(currToken.Value)
-		return err
-	case Identifier, LeftBrace:
-		// Start of a struct
-	case LeftBracket:
-		// Start of an array
-	case NewLine:
-		// OK
-	case RightBrace, RightBracket:
-		// ok
-		// Rewind to the old root
-		//fmt.Println("v=", v)
-		//fmt.Println("oldRootValue=", parser.oldRootValue)
-		v = parser.oldRootValue
-		if parser.oldRootValue.Kind() == reflect.Slice {
-			// Go back to the decodeSequence method
-			return nil
-		}
-	default:
-		err = &ParserInvalidTokenTypeErr{currToken}
-	}
-	if len(parser.tokens) > 1 {
 		parser.tokens = parser.tokens[1:]
-		parser.decode(v)
+
 	}
 	return err
 }
 
-// Assumes that '[' has already been scanned and first token is the one after '['
-func (parser *HoconParser) decodeSequence(v reflect.Value) error {
+// function decodeObject is invoked when the caller sees a '{' and recurses till a matching '}' is found.
+//
+// Assumes that the '{' has already been parsed
+func (parser *HoconParser) decodeObject(v reflect.Value, pv reflect.Value) error {
 	var err error
 
-	currentToken := parser.tokens[0]
-	//prevToken := currentToken
-	if currentToken.Type == RightBracket {
-		// End of Array
-	} else if currentToken.Type == LeftBrace {
-		// Array of Objects
-		// X = [ { a = "10", b = 20 }, { a = "30", b = 40 } ]
-		// struct { X []struct {A string, B int} }
-		// X = [ { a = "10", b = [ 1 2 3 4 ] } ]
-
-		// Create a dummy element to get the type
-		dummy := reflect.MakeSlice(v.Type(), 1, 1)
-		sliceElementType := dummy.Index(0).Type()
-
-		// Make the actual Slice
-		nv := reflect.MakeSlice(v.Type(), 0, 0)
-
-		for numTokens, i := len(parser.tokens), 1; i < numTokens; i++ {
-			//for _, t := range parser.tokens {
-			sliceElement := reflect.New(sliceElementType).Elem()
-			//nv := reflect.MakeSlice(v.Type(), 1, 1)
-			//fmt.Println(v.Type())     // v points to array variable // []struct { A string; B int }
-			//fmt.Println(sliceElement) // nv // [{ 0}]
-
-			t := parser.tokens[0]
-			if t.Type == RightBracket {
-				break
+	lCount := 1
+	rCount := 0
+	for {
+		token := parser.tokens[0]
+		//fmt.Println("v =", v.Type(), "pv =", pv.Type())
+		switch token.Type {
+		case Key:
+			v = pv.FieldByName(token.Value)
+		case Equals, Colon, Comma:
+		case NewLine:
+		case Boolean, Integer, Duration, Float, Text:
+			if err = parser.setValue(v, token); err != nil {
+				return err
 			}
-			parser.tokens = parser.tokens[1:]
-			if t.Type != Comma && t.Type != RightBrace && t.Type != RightBracket {
-				// Set the value based on type
-				// Iterate over fields within the array element
-				// And maybe invoke decode method to set the value into the element
-				//fmt.Println(sliceElement.Type()) //struct { A string; B int }
-
-				parser.oldRootValue = v
-				//fmt.Println(parser.oldRootValue)
-				if err := parser.decode(sliceElement); err != nil {
-					return err
-				}
-				//fmt.Println(sliceElement)
-				//fmt.Println(nv)
-				//v = reflect.AppendSlice(v, nv)
-
-				nv = reflect.Append(nv, sliceElement)
-
-				//fmt.Println(nv)
+		case LeftBrace:
+			lCount++
+			parser.tokens = parser.tokens[1:] //this is to avoid the infinite loop
+			if err = parser.decodeObject(v, v); err != nil {
+				return err
 			}
-			i++
-		}
-		v.Set(nv)
-	} else {
-		// Array of primitives
-		// X = 10
-		// Y = [ 1, 2, 3, 4 ]
-		// Y []int
-		// v should be pointing to Y, so depending on data type of currentToken, keep appending to the slice till an invalid token / end of array is encountered
-		if v.Kind() != reflect.Slice {
-			// TODO : Return Error
-		}
-
-		// Count the number of array elements
-		numElements := 0
-		arrayEndIndex := 0
-		for i, token := range parser.tokens {
-			if token.Type == RightBracket {
-				arrayEndIndex = i
-				break
-			}
-			if token.Type != Comma {
-				numElements++
-			}
-		}
-
-		if nv := reflect.MakeSlice(v.Type(), numElements, numElements); nv.IsValid() {
-
-			i := 0
-
-			for _, token := range parser.tokens {
-				if token.Type == RightBracket {
-					parser.tokens = parser.tokens[arrayEndIndex:]
-					break
-				}
-				if token.Type != Comma && token.Type != NewLine {
-					// Decode the token value into the current slice element
-					switch token.Type {
-					case Integer:
-						val, err := strconv.ParseInt(token.Value, 10, 64)
-						if err != nil {
-							return err
-						}
-						////fmt.Println(v.Type())
-						nv.Index(i).SetInt(val)
-
-					case Float:
-						val, err := strconv.ParseFloat(token.Value, 64)
-						if err != nil {
-							return err
-						}
-						////fmt.Println(v.Type())
-						nv.Index(i).SetFloat(val)
-					case Text:
-						nv.Index(i).SetString(token.Value)
-					}
-					i++
-				}
-			}
-
+			// We have returned from decodeObject, so update the rCount otherwise we never return
+			rCount++
+		case LeftBracket:
+			// start of an slice
+			// create the slice
+			nv := reflect.MakeSlice(v.Type(), 0, 0)
 			v.Set(nv)
+			// Call decodeSequence
+			parser.tokens = parser.tokens[1:] //this is to avoid the infinite loop
+			if err = parser.decodeSequence(v, v); err != nil {
+				return err
+			}
+		case RightBrace:
+			rCount++
+		case RightBracket:
+		}
+		// Advance the tokens
+		numTokens := len(parser.tokens)
+		if numTokens <= 1 {
+			break
 		}
 
-		// Call decode method to recurse
+		if lCount == rCount {
+			// Reached end of block
+			break
+		}
+		parser.tokens = parser.tokens[1:]
+
+	}
+	return err
+}
+
+// function decodeSequence handles aggregate types arrays/slices and is called by the decode function.
+// It can call the function decodeObject, if the aggregate type is an object
+// assumes that '[' has already been scanned and the first character is the one after that
+func (parser *HoconParser) decodeSequence(v reflect.Value, pv reflect.Value) error {
+	var err error
+
+	lCount := 1
+	rCount := 0
+	index := 0
+	for {
+		token := parser.tokens[0]
+		//fmt.Println("v =", v.Type(), "pv =", pv.Type())
+		switch token.Type {
+		case Key:
+			v = pv.FieldByName(token.Value)
+		case Equals, Colon, Comma, NewLine:
+			//Ok
+		case Boolean, Integer, Duration, Float, Text:
+			// Allocate a new element
+			elem := reflect.New(pv.Type().Elem()).Elem()
+			// Append the element
+
+			pv.Set(reflect.Append(pv, elem))
+			v = pv.Index(pv.Len() - 1)
+			//v = pv.Index(index)
+			if err = parser.setValue(v, token); err != nil {
+				return err
+			}
+			index++
+		case LeftBrace:
+			// Allocate a new element
+			elem := reflect.New(pv.Type().Elem()).Elem()
+			pv.Set(reflect.Append(pv, elem))
+			v = pv.Index(pv.Len() - 1)
+			parser.tokens = parser.tokens[1:]
+			if err = parser.decodeObject(v, v); err != nil {
+				return err
+			}
+
+		case LeftBracket:
+			lCount++
+			// start of an slice
+			// create the slice
+			nv := reflect.MakeSlice(v.Type(), 0, 0)
+			v.Set(nv)
+			// Recursive call
+			if err = parser.decodeSequence(v, v); err != nil {
+				return err
+			}
+			rCount++
+		case RightBrace:
+
+		case RightBracket:
+			rCount++
+		}
+		// Advance the tokens
+		numTokens := len(parser.tokens)
+		if numTokens <= 1 {
+			break
+		}
+
+		if lCount == rCount {
+			// Reached end of block
+			break
+		}
+		parser.tokens = parser.tokens[1:]
+	}
+	return err
+}
+
+func (parser *HoconParser) getNextToken(startIndex int) (HoconToken, int) {
+	var token HoconToken
+	var index int
+	for i, t := range parser.tokens[startIndex:] {
+		if t.Type != NewLine {
+			token = t
+			index = i
+			break
+		}
+	}
+	return token, index
+}
+
+func (parser *HoconParser) setValue(v reflect.Value, token HoconToken) error {
+	var err error
+
+	tokenValue := token.Value
+	switch token.Type {
+	case Boolean:
+		val, err := strconv.ParseBool(tokenValue)
+		if err != nil {
+			return err
+		}
+		v.SetBool(val)
+	case Integer:
+		val, err := strconv.ParseInt(tokenValue, 10, 64)
+		if err != nil {
+			return err
+		}
+		v.SetInt(val)
+	case Float:
+		val, err := strconv.ParseFloat(tokenValue, 64)
+		if err != nil {
+			return err
+		}
+		v.SetFloat(val)
+	case Duration:
+		val, err := time.ParseDuration(tokenValue + "ns")
+		if err != nil {
+			return err
+		}
+		v.SetInt(int64(val))
+	case Text:
+		v.SetString(tokenValue)
 	}
 	return err
 }
@@ -324,6 +334,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value) error {
 func checkBalancedParens(tokens []HoconToken) error {
 	var err error
 	var stack []rune
+
 	for _, token := range tokens {
 		switch token.Type {
 		case LeftBrace, LeftBracket, LeftParen:
