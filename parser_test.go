@@ -165,7 +165,7 @@ type ArrayInsideStruct struct {
 }
 
 type ArrayInsideStructFollowedByKeyValPair struct {
-	A string
+	A string `hocon:"a"`
 	B struct {
 		X []int
 	}
@@ -174,7 +174,7 @@ type ArrayInsideStructFollowedByKeyValPair struct {
 
 var keyValuePairsInBlocks = []TestTableStruct{
 	// Array inside struct with space separating elements followed by KV pair
-	{contents: `A = some string 
+	{contents: `a = some string 
 				B { X = [1 2 3] }
 				C = 12.34`, target: &ArrayInsideStructFollowedByKeyValPair{}, validateFunc: func(t interface{}) bool {
 		v, ok := t.(*ArrayInsideStructFollowedByKeyValPair)

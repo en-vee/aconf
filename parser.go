@@ -4,7 +4,6 @@ import (
 	"io"
 	"reflect"
 	"strconv"
-	"strings"
 	"time"
 	"unicode/utf8"
 )
@@ -91,13 +90,21 @@ func (parser *HoconParser) unmarshal(v interface{}) error {
 
 func (parser *HoconParser) FieldByName(fieldName string, v reflect.Value) reflect.Value {
 	var nv reflect.Value
-	for i := 0; i < v.NumField(); i++ {
-		if v.Field(i).Type().Field(i).Name == strings.ToTitle(fieldName) {
-			nv = v.Field(i)
-			////fmt.Println(v)
-			////fmt.Println(nv)
-			////fmt.Println(v.FieldByName(fieldName))
-			break
+	// First try to lookup the field directly in the Value
+	if nv = v.FieldByName(fieldName); nv.IsValid() {
+		return nv
+	}
+	// If not found then try to look it up based on tags
+	t := v.Type()
+	for i := 0; i < t.NumField(); i++ {
+		// Does fieldName match the tag value ?
+		sTag := t.Field(i).Tag
+		if sName, ok := sTag.Lookup("hocon"); ok {
+			if sName == fieldName {
+				// Return the Value.Field based on this sName
+				nv = v.FieldByName(t.Field(i).Name)
+				break
+			}
 		}
 	}
 	return nv
@@ -114,7 +121,8 @@ func (parser *HoconParser) decode(v reflect.Value, pv reflect.Value) error {
 
 		switch token.Type {
 		case Key:
-			v = pv.FieldByName(token.Value)
+			//v = parser.FieldByName(token.Value, pv)
+			v = parser.FieldByName(token.Value, pv)
 		case Equals, Colon, Comma:
 		case NewLine:
 		case Boolean, Integer, Duration, Float, Text:
@@ -168,7 +176,7 @@ func (parser *HoconParser) decodeObject(v reflect.Value, pv reflect.Value) error
 		//fmt.Println("v =", v.Type(), "pv =", pv.Type())
 		switch token.Type {
 		case Key:
-			v = pv.FieldByName(token.Value)
+			v = parser.FieldByName(token.Value, pv)
 		case Equals, Colon, Comma:
 		case NewLine:
 		case Boolean, Integer, Duration, Float, Text:
@@ -227,7 +235,7 @@ func (parser *HoconParser) decodeSequence(v reflect.Value, pv reflect.Value) err
 		//fmt.Println("v =", v.Type(), "pv =", pv.Type())
 		switch token.Type {
 		case Key:
-			v = pv.FieldByName(token.Value)
+			v = parser.FieldByName(token.Value, pv)
 		case Equals, Colon, Comma, NewLine:
 			//Ok
 		case Boolean, Integer, Duration, Float, Text:
