@@ -30,7 +30,7 @@ A {
 - Create a HOCON parser by providing an ```io.Reader``` to read the file
 ```go
 reader, err := os.Open("/path/to/configFilename.conf")
-parser := &HoconParser{}
+parser := &aconf.HoconParser{}
 ```
 - Declare a go struct to match the configuration file format. Note that all the members of the go struct need to be exported/capitalized and the field names within the struct should exactly match the field names in the HOCON config file. 
 - Struct Tags are also supported with the key being hocon. An example is shown below. The tag key **must** be ```hocon```
