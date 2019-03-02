@@ -314,7 +314,9 @@ func (parser *HoconParser) setValue(v reflect.Value, token HoconToken) error {
 		if err != nil {
 			return err
 		}
-		v.SetBool(val)
+		if v.IsValid() && v.Kind() == reflect.Bool {
+			v.SetBool(val)
+		}
 	case Integer:
 		val, err := strconv.ParseInt(tokenValue, 10, 64)
 		if err != nil {
@@ -334,7 +336,9 @@ func (parser *HoconParser) setValue(v reflect.Value, token HoconToken) error {
 		}
 		v.SetInt(int64(val))
 	case Text:
-		v.SetString(tokenValue)
+		if v.IsValid() && v.Kind() == reflect.String {
+			v.SetString(tokenValue)
+		}
 	}
 	return err
 }

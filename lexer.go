@@ -117,7 +117,7 @@ func init() {
 }
 
 /*
-Run1 returns a list of acceptable tokens for the parser to perform syntactical checking.
+Run returns a list of acceptable tokens for the parser to perform syntactical checking.
 It is upto the parser to perform concatenation of strings, checking for sequence of tokens, ensuring no dangling tokens are present etc.
 
 Keys are anything to the left of an = or :
@@ -128,23 +128,6 @@ A Key/Path expression must always start on a new line
 
 Trailing spaces in Values should be trimmed, unless they are in a quoted string.
 */
-func (lexer *HoconLexer) Run1() ([]HoconToken, error) {
-	var tokens []HoconToken
-	var err error
-
-	for token := lexer.scanner.Scan(); token != scanner.EOF && lexer.err == nil; token = lexer.scanner.Scan() {
-		switch token {
-
-		case '#': // Processing a comment
-			for r := lexer.scanner.Peek(); r != NL && r != scanner.EOF; {
-				r = lexer.scanner.Next()
-			}
-		}
-	}
-
-	return tokens, err
-}
-
 func (lexer *HoconLexer) Run() ([]HoconToken, error) {
 	var tokens []HoconToken
 	//var err error
