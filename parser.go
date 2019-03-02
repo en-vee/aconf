@@ -322,19 +322,25 @@ func (parser *HoconParser) setValue(v reflect.Value, token HoconToken) error {
 		if err != nil {
 			return err
 		}
-		v.SetInt(val)
+		if v.IsValid() && v.Kind() == reflect.Int64 {
+			v.SetInt(val)
+		}
 	case Float:
 		val, err := strconv.ParseFloat(tokenValue, 64)
 		if err != nil {
 			return err
 		}
-		v.SetFloat(val)
+		if v.IsValid() && v.Kind() == reflect.Float64 {
+			v.SetFloat(val)
+		}
 	case Duration:
 		val, err := time.ParseDuration(tokenValue + "ns")
 		if err != nil {
 			return err
 		}
-		v.SetInt(int64(val))
+		if v.IsValid() && v.Kind() == reflect.Int64 {
+			v.SetInt(int64(val))
+		}
 	case Text:
 		if v.IsValid() && v.Kind() == reflect.String {
 			v.SetString(tokenValue)
